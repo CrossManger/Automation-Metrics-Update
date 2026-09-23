@@ -66,35 +66,15 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "=========================================="
 
                     sh '''
-                        # 1. Ưu tiên kích hoạt Node 24 có sẵn trên hệ thống vào đầu PATH
-                        if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
-                            export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
-                        fi
+                        export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
 
-                        # 2. Kiểm tra phiên bản Node (Major version) an toàn bằng cut
-                        MAJOR_VER=$(node -v 2>/dev/null | cut -d'.' -f1 | tr -d 'v')
+                        echo "[*] Node version: $(node -v)"
+                        echo "[*] NPM version:  $(npm -v)"
 
-                        # 3. Nếu chưa có Node hoặc Node < 20 thì mới gọi NVM để cài Node 20
-                        if [ -z "$MAJOR_VER" ] || [ "$MAJOR_VER" -lt 20 ]; then
-                            if [ -s "$HOME/.nvm/nvm.sh" ]; then
-                                . "$HOME/.nvm/nvm.sh"
-                                if ! nvm use 20 >/dev/null 2>&1; then
-                                    echo "[*] Đang tự động tải và kích hoạt Node 20 qua nvm..."
-                                    nvm install 20
-                                    nvm use 20
-                                    nvm alias default 20
-                                fi
-                            fi
-                        fi
-
-                        export PATH="$HOME/.local/bin:$PATH"
-                        echo "[*] Node version đang dùng: $(node -v)"
-                        echo "[*] NPM version đang dùng:  $(npm -v)"
-
-                        # 4. Cài đặt các dependencies cần thiết
+                        # 1. Cài đặt các thư viện (dependencies)
                         npm install
 
-                        # 5. Tải trình duyệt Chromium cho Playwright
+                        # 2. Tải trình duyệt Chromium cho Playwright
                         npx playwright install chromium
                     '''
                 }
@@ -125,15 +105,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                         "HEADLESS=true"
                     ]) {
                         sh '''
-                            if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
-                                export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
-                            elif [ -s "$HOME/.nvm/nvm.sh" ]; then
-                                . "$HOME/.nvm/nvm.sh"
-                                nvm use 20 >/dev/null 2>&1 || true
-                            fi
-                            export PATH="$HOME/.local/bin:$PATH"
-
-                            echo "[*] Chạy scraper với Node: $(node -v)"
+                            export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
                             node scraper.js
                         '''
                     }
@@ -152,15 +124,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "=========================================="
 
                     sh '''
-                        if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
-                            export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
-                        elif [ -s "$HOME/.nvm/nvm.sh" ]; then
-                            . "$HOME/.nvm/nvm.sh"
-                            nvm use 20 >/dev/null 2>&1 || true
-                        fi
-                        export PATH="$HOME/.local/bin:$PATH"
-
-                        echo "[*] Chạy gửi Power Automate với Node: $(node -v)"
+                        export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
                         node main.js
                     '''
                 }
