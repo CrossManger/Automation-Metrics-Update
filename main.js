@@ -15,10 +15,14 @@ const path = require('path');
 // Đường dẫn file dữ liệu đã cào
 const DATA_FILE = path.join(__dirname, 'scraped_data.json');
 
-// URL Webhook Power Automate
+const { config, POWER_AUTOMATE_WEBHOOKS } = require('./config');
+
+// Xác định Team cần gửi (MAX hoặc MSS)
+const currentTeam = (process.env.TEAM || config.team || 'MAX').toUpperCase();
 const powerAutomateUrl =
   process.env.POWER_AUTOMATE_URL ||
-  'https://default57a2790d9e61427a87f06ede7caf4a.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/28/workflows/abe30c32b5464a70ac08b95238b100fa/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Vas5QgQqPhAwKj8cK5kvqWBZMWzj46278ITgInUv5MU';
+  POWER_AUTOMATE_WEBHOOKS[currentTeam] ||
+  POWER_AUTOMATE_WEBHOOKS['MAX'];
 
 // Hàm đọc dữ liệu từ scraped_data.json
 function loadScrapedData() {
@@ -50,14 +54,22 @@ async function sendData() {
   const scrapedData = loadScrapedData();
 
   console.log('\n' + '='.repeat(70));
-  console.log('GỬI DỮ LIỆU METRICS SANG POWER AUTOMATE');
+  console.log(`GỬI DỮ LIỆU METRICS SANG POWER AUTOMATE [TEAM: ${currentTeam}]`);
   console.log('='.repeat(70));
-  console.log('[*] Nguồn dữ liệu:', DATA_FILE);
+  console.log('[*] Đang gửi cho Team:', currentTeam);
+  console.log('[*] Nguồn dữ liệu:    ', DATA_FILE);
   console.log('[*] Dữ liệu thực tế đang gửi đi:');
   console.log(JSON.stringify(scrapedData, null, 2));
   console.log('='.repeat(70) + '\n');
 
-  console.log('[*] Đang gửi yêu cầu POST sang Power Automate Webhook...');
+  if (powerAutomateUrl.includes('YOUR_POWER_AUTOMATE_WEBHOOK_URL_FOR_MSS_HERE')) {
+    console.error(`[X] LỖI CẤU HÌNH: Bạn đang chọn Team MSS nhưng chưa cấu hình URL Webhook Power Automate cho Team MSS!`);
+    console.error(`     Vui lòng mở file config.js để dán URL Webhook của Team MSS vào biến POWER_AUTOMATE_WEBHOOKS.MSS,`);
+    console.error(`     hoặc truyền biến môi trường POWER_AUTOMATE_URL_MSS trên Jenkins.`);
+    process.exit(1);
+  }
+
+  console.log(`[*] Đang gửi yêu cầu POST sang Webhook của [Team ${currentTeam}]...`);
   try {
     const response = await fetch(powerAutomateUrl, {
       method: 'POST',

@@ -40,6 +40,7 @@ async function scrape(customConfig = null) {
   console.log('\n' + '='.repeat(70));
   console.log('CHƯƠNG TRÌNH TỰ ĐỘNG THU THẬP DỮ LIỆU METRICS (LIS + JENKINS)');
   console.log('='.repeat(70));
+  console.log(`[*] Team dự án:          ${config.team || 'MAX'}`);
   console.log(`[*] Sprint cấu hình:     ${config.sprint}`);
   console.log(`[*] Khoảng thời gian:    ${config.startDate} -> ${config.endDate}`);
   console.log(`[*] Hệ thống LIS:        ${LIS_URL}`);

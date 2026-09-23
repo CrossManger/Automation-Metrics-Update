@@ -16,6 +16,17 @@ const OUTPUT_DATA_FILE = path.join(__dirname, 'scraped_data.json');
 const LIS_URL = 'https://lis.larion.com/';
 const JENKINS_URL = 'http://172.16.4.215:8080/view/MAX/';
 
+// Bảng ánh xạ Webhook Power Automate theo Team
+const POWER_AUTOMATE_WEBHOOKS = {
+  MAX:
+    process.env.POWER_AUTOMATE_URL_MAX ||
+    process.env.POWER_AUTOMATE_URL ||
+    'https://default57a2790d9e61427a87f06ede7caf4a.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/28/workflows/abe30c32b5464a70ac08b95238b100fa/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Vas5QgQqPhAwKj8cK5kvqWBZMWzj46278ITgInUv5MU',
+  MSS:
+    process.env.POWER_AUTOMATE_URL_MSS ||
+    'https://YOUR_POWER_AUTOMATE_WEBHOOK_URL_FOR_MSS_HERE',
+};
+
 function loadConfig() {
   let config = {};
   if (fs.existsSync(CONFIG_FILE)) {
@@ -27,6 +38,7 @@ function loadConfig() {
   }
 
   // Ưu tiên biến môi trường (phù hợp khi chạy trên Jenkins CI/CD hoặc Docker)
+  config.team = (process.env.TEAM || config.team || 'MAX').toUpperCase();
   config.username = process.env.LIS_USERNAME || config.username;
   config.password = process.env.LIS_PASSWORD || config.password;
   config.jenkins_username = process.env.JENKINS_USERNAME || config.jenkins_username || config.username;
@@ -71,4 +83,5 @@ module.exports = {
   AUTH_FILE,
   AUTH_JENKINS_FILE,
   OUTPUT_DATA_FILE,
+  POWER_AUTOMATE_WEBHOOKS,
 };

@@ -3,6 +3,15 @@ pipeline {
 
     parameters {
         // =========================================================================
+        // LỰA CHỌN TEAM DỰ ÁN (TARGET TEAM & EXCEL)
+        // =========================================================================
+        choice(
+            name: 'TEAM',
+            choices: ['MAX', 'MSS'],
+            description: 'Chọn Team cần cập nhật Metrics: MAX (Excel 1) hoặc MSS (Excel 2)'
+        )
+
+        // =========================================================================
         // THÔNG TIN XÁC THỰC (CREDENTIALS)
         // =========================================================================
         string(name: 'LIS_USERNAME', defaultValue: '', description: 'LIS Username')
@@ -28,7 +37,7 @@ pipeline {
             steps {
                 script {
                     echo "=========================================="
-                    echo "🔍 Đang kiểm tra thông tin nhập liệu..."
+                    echo "🔍 Đang kiểm tra thông tin nhập liệu (Team: ${params.TEAM})..."
                     echo "=========================================="
 
                     def missingParams = []
@@ -50,6 +59,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     }
 
                     echo "✅ Tất cả thông tin nhập liệu đã đầy đủ và hợp lệ."
+                    echo "   - Team:       ${params.TEAM} (Cập nhật ${params.TEAM == 'MAX' ? 'Excel 1' : 'Excel 2'})"
                     echo "   - Sprint:     ${params.SPRINT_NAME}"
                     echo "   - Dải ngày:   ${params.START_DATE} -> ${params.END_DATE}"
                     echo "   - Cập nhật:   Tự động gửi sang Power Automate (Bắt buộc)"
@@ -99,6 +109,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                 script {
                     echo "=========================================="
                     echo "▶ [BƯỚC 1] Khởi chạy thu thập Metrics từ LIS & Jenkins..."
+                    echo "Team:       ${params.TEAM}"
                     echo "User LIS:   ${params.LIS_USERNAME}"
                     echo "Sprint:     ${params.SPRINT_NAME}"
                     echo "Dải ngày:   ${params.START_DATE} -> ${params.END_DATE}"
@@ -108,6 +119,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     def jenkinsPass = params.JENKINS_PASSWORD?.toString()?.trim() ?: params.LIS_PASSWORD
 
                     withEnv([
+                        "TEAM=${params.TEAM}",
                         "LIS_USERNAME=${params.LIS_USERNAME}",
                         "LIS_PASSWORD=${params.LIS_PASSWORD}",
                         "JENKINS_USERNAME=${jenkinsUser}",
@@ -125,7 +137,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                             nvm use 20 >/dev/null 2>&1 || true
 
-                            echo "[*] Chạy scraper với Node: $(node -v)"
+                            echo "[*] Chạy scraper cho Team ${TEAM} với Node: $(node -v)"
                             node scraper.js
                         '''
                     }
@@ -140,20 +152,24 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
             steps {
                 script {
                     echo "=========================================="
-                    echo "▶ [BƯỚC 2] Gửi dữ liệu Metrics sang Power Automate cập nhật Excel..."
+                    echo "▶ [BƯỚC 2] Gửi dữ liệu Metrics của Team [${params.TEAM}] sang Power Automate cập nhật Excel..."
                     echo "=========================================="
 
-                    sh '''
-                        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-                        if [ ! -d "$NVM_DIR" ] && [ -d "/var/lib/jenkins/.nvm" ]; then
-                            export NVM_DIR="/var/lib/jenkins/.nvm"
-                        fi
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm use 20 >/dev/null 2>&1 || true
+                    withEnv([
+                        "TEAM=${params.TEAM}"
+                    ]) {
+                        sh '''
+                            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+                            if [ ! -d "$NVM_DIR" ] && [ -d "/var/lib/jenkins/.nvm" ]; then
+                                export NVM_DIR="/var/lib/jenkins/.nvm"
+                            fi
+                            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                            nvm use 20 >/dev/null 2>&1 || true
 
-                        echo "[*] Chạy gửi Power Automate với Node: $(node -v)"
-                        node main.js
-                    '''
+                            echo "[*] Chạy gửi Power Automate cho Team ${TEAM} với Node: $(node -v)"
+                            node main.js
+                        '''
+                    }
                 }
             }
         }
