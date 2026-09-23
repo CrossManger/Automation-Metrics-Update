@@ -9,3 +9,4 @@ screenshots/
 *.txt
 test_*.js
 scraped_data.json
+HowTo*.md
