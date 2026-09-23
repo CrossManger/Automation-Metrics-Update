@@ -1,0 +1,20 @@
+{
+  "name": "auto_collect_metrics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "node scraper.js",
+    "scrape": "node scraper.js",
+    "scrape:lis": "node lis_service.js",
+    "scrape:jenkins": "node jenkins_service.js",
+    "send": "node main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

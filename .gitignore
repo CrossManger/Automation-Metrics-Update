@@ -1,0 +1,11 @@
+# Các file nhạy cảm - KHÔNG đưa lên git
+config.json
+auth.json
+auth_jenkins.json
+node_modules/
+screenshots/
+*.png
+*.html
+*.txt
+test_*.js
+scraped_data.json
