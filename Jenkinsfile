@@ -21,7 +21,6 @@ pipeline {
     environment {
         HEADLESS = 'true'
         CI = 'true'
-        PATH = "/home/minhvh/.nvm/versions/node/v24.20.0/bin:$HOME/.local/bin:$PATH"
     }
 
     stages {
@@ -66,15 +65,29 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "=========================================="
 
                     sh '''
-                        export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
+                        # 1. Nạp NVM từ thư mục của Jenkins
+                        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+                        if [ ! -d "$NVM_DIR" ] && [ -d "/var/lib/jenkins/.nvm" ]; then
+                            export NVM_DIR="/var/lib/jenkins/.nvm"
+                        fi
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
+                        # 2. Chuyển sang Node 20 (nếu chưa có thì tự động tải và cài đặt Node 20)
+                        if ! nvm use 20 >/dev/null 2>&1; then
+                            echo "[*] Máy chủ Jenkins chưa có Node 20, đang tự động cài đặt Node 20 qua NVM..."
+                            nvm install 20
+                            nvm use 20
+                            nvm alias default 20
+                        fi
+
+                        export PATH="$HOME/.local/bin:$PATH"
                         echo "[*] Node version: $(node -v)"
                         echo "[*] NPM version:  $(npm -v)"
 
-                        # 1. Cài đặt các thư viện (dependencies)
+                        # 3. Cài đặt các thư viện (dependencies)
                         npm install
 
-                        # 2. Tải trình duyệt Chromium cho Playwright
+                        # 4. Tải trình duyệt Chromium cho Playwright
                         npx playwright install chromium
                     '''
                 }
@@ -105,7 +118,14 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                         "HEADLESS=true"
                     ]) {
                         sh '''
-                            export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
+                            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+                            if [ ! -d "$NVM_DIR" ] && [ -d "/var/lib/jenkins/.nvm" ]; then
+                                export NVM_DIR="/var/lib/jenkins/.nvm"
+                            fi
+                            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                            nvm use 20 >/dev/null 2>&1 || true
+
+                            echo "[*] Chạy scraper với Node: $(node -v)"
                             node scraper.js
                         '''
                     }
@@ -124,7 +144,14 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "=========================================="
 
                     sh '''
-                        export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
+                        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+                        if [ ! -d "$NVM_DIR" ] && [ -d "/var/lib/jenkins/.nvm" ]; then
+                            export NVM_DIR="/var/lib/jenkins/.nvm"
+                        fi
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        nvm use 20 >/dev/null 2>&1 || true
+
+                        echo "[*] Chạy gửi Power Automate với Node: $(node -v)"
                         node main.js
                     '''
                 }
