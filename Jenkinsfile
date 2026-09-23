@@ -8,7 +8,7 @@ pipeline {
         choice(
             name: 'TEAM',
             choices: ['MAX', 'MSS'],
-            description: 'Chọn Team cần cập nhật Metrics: MAX (Excel 1) hoặc MSS (Excel 2)'
+            description: 'MAX or MSS'
         )
 
         // =========================================================================

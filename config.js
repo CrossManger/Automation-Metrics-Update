@@ -24,7 +24,7 @@ const POWER_AUTOMATE_WEBHOOKS = {
     'https://default57a2790d9e61427a87f06ede7caf4a.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/28/workflows/abe30c32b5464a70ac08b95238b100fa/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Vas5QgQqPhAwKj8cK5kvqWBZMWzj46278ITgInUv5MU',
   MSS:
     process.env.POWER_AUTOMATE_URL_MSS ||
-    'https://YOUR_POWER_AUTOMATE_WEBHOOK_URL_FOR_MSS_HERE',
+    'https://default57a2790d9e61427a87f06ede7caf4a.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/13/workflows/250b97ff39ed4dd68216493709c4b0f2/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=CDLlyAIdSEpUQQc8N4SLFHbB0kV9nEgfWkIXuQKVawk',
 };
 
 function loadConfig() {
