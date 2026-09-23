@@ -21,6 +21,7 @@ pipeline {
     environment {
         HEADLESS = 'true'
         CI = 'true'
+        PATH = "/home/minhvh/.nvm/versions/node/v24.20.0/bin:$HOME/.local/bin:$PATH"
     }
 
     stages {
@@ -65,25 +66,45 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "=========================================="
 
                     sh '''
-                        # 1. Tự động nhận diện Node.js và nvm nếu có trên môi trường Jenkins
+                        # 1. Tự động nhận diện nvm nếu có trên môi trường Jenkins
                         if [ -s "$HOME/.nvm/nvm.sh" ]; then
                             . "$HOME/.nvm/nvm.sh"
                         fi
-                        if [ -d "$HOME/.nvm/versions/node" ]; then
-                            NODE_LATEST=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | tail -n 1)
-                            if [ -n "$NODE_LATEST" ]; then
-                                export PATH="$HOME/.nvm/versions/node/$NODE_LATEST/bin:$PATH"
+
+                        # 2. Kiểm tra phiên bản Node hiện tại
+                        CURRENT_NODE_VER=$(node -v 2>/dev/null || echo "v0")
+                        MAJOR_VER=$(echo "$CURRENT_NODE_VER" | sed -E 's/^v([0-9]+).*/\1/')
+
+                        # Nếu Node < 20, ưu tiên kích hoạt Node 24 có sẵn trên hệ thống
+                        if [ -z "$MAJOR_VER" ] || [ "$MAJOR_VER" -lt 20 ]; then
+                            if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
+                                echo "[*] Kích hoạt Node.js v24 từ hệ thống (/home/minhvh/.nvm/versions/node/v24.20.0/bin)..."
+                                export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
                             fi
                         fi
+
+                        # 3. Nếu vẫn chưa có Node >= 20 và có nvm, tự động cài đặt Node 20
+                        CURRENT_NODE_VER=$(node -v 2>/dev/null || echo "v0")
+                        MAJOR_VER=$(echo "$CURRENT_NODE_VER" | sed -E 's/^v([0-9]+).*/\1/')
+
+                        if [ -z "$MAJOR_VER" ] || [ "$MAJOR_VER" -lt 20 ]; then
+                            if command -v nvm >/dev/null 2>&1; then
+                                echo "[*] Phiên bản Node hiện tại ($CURRENT_NODE_VER) chưa đáp ứng Playwright (yêu cầu >= 20)."
+                                echo "[*] Đang tự động tải và kích hoạt Node 20 qua nvm..."
+                                nvm install 20
+                                nvm use 20
+                                nvm alias default 20
+                            fi
+                        fi
+
                         export PATH="$HOME/.local/bin:$PATH"
+                        echo "[*] Node version đang dùng: $(node -v)"
+                        echo "[*] NPM version đang dùng:  $(npm -v)"
 
-                        echo "[*] Node version: $(node -v 2>/dev/null || echo 'Chưa tìm thấy node')"
-                        echo "[*] NPM version:  $(npm -v 2>/dev/null || echo 'Chưa tìm thấy npm')"
-
-                        # 2. Cài đặt các dependencies cần thiết
+                        # 4. Cài đặt các dependencies cần thiết
                         npm install
 
-                        # 3. Tải trình duyệt Chromium cho Playwright
+                        # 5. Tải trình duyệt Chromium cho Playwright
                         npx playwright install chromium
                     '''
                 }
@@ -117,14 +138,14 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                             if [ -s "$HOME/.nvm/nvm.sh" ]; then
                                 . "$HOME/.nvm/nvm.sh"
                             fi
-                            if [ -d "$HOME/.nvm/versions/node" ]; then
-                                NODE_LATEST=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | tail -n 1)
-                                if [ -n "$NODE_LATEST" ]; then
-                                    export PATH="$HOME/.nvm/versions/node/$NODE_LATEST/bin:$PATH"
-                                fi
+                            if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
+                                export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
+                            elif command -v nvm >/dev/null 2>&1; then
+                                nvm use 20 >/dev/null 2>&1 || true
                             fi
                             export PATH="$HOME/.local/bin:$PATH"
 
+                            echo "[*] Chạy scraper với Node: $(node -v)"
                             node scraper.js
                         '''
                     }
@@ -146,14 +167,14 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                         if [ -s "$HOME/.nvm/nvm.sh" ]; then
                             . "$HOME/.nvm/nvm.sh"
                         fi
-                        if [ -d "$HOME/.nvm/versions/node" ]; then
-                            NODE_LATEST=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | tail -n 1)
-                            if [ -n "$NODE_LATEST" ]; then
-                                export PATH="$HOME/.nvm/versions/node/$NODE_LATEST/bin:$PATH"
-                            fi
+                        if [ -x "/home/minhvh/.nvm/versions/node/v24.20.0/bin/node" ]; then
+                            export PATH="/home/minhvh/.nvm/versions/node/v24.20.0/bin:$PATH"
+                        elif command -v nvm >/dev/null 2>&1; then
+                            nvm use 20 >/dev/null 2>&1 || true
                         fi
                         export PATH="$HOME/.local/bin:$PATH"
 
+                        echo "[*] Chạy gửi Power Automate với Node: $(node -v)"
                         node main.js
                     '''
                 }
