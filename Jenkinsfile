@@ -164,9 +164,9 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
             echo "=========================================="
             echo "🏁 Kết thúc tiến trình Build trên Jenkins."
             echo "=========================================="
-            // Dọn dẹp session và file tạm để đảm bảo an toàn bảo mật
+            // Dọn dẹp session và file tạm để đảm bảo an toàn bảo mật và workspace sạch sẽ
             sh '''
-                rm -f auth.json auth_jenkins.json
+                rm -f auth.json auth_jenkins.json scraped_data.json
             '''
         }
         success {
