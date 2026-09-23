@@ -79,44 +79,49 @@ async function ensureLoggedInLIS(page, context, config) {
  * Trả về URL của Sprint task.
  */
 async function searchAndOpenSprint(page, sprintName) {
-  console.log(`[*] [Thao tác 1] Tìm kiếm Sprint: "${sprintName}"...`);
-  const searchBox = page.locator('#search_q_autocomplete');
-  await searchBox.waitFor({ state: 'visible', timeout: 10000 });
-  await searchBox.click();
-  await searchBox.pressSequentially(sprintName, { delay: 60 });
-  await searchBox.press('Enter');
+  const cleanSprint = sprintName.trim();
+  console.log(`[*] [Thao tác 1] Tìm kiếm Sprint: "${cleanSprint}"...`);
 
-  await page.waitForLoadState('load', { timeout: 30000 });
-
-  console.log('  [*] Mở Advanced search và bỏ chọn "Open tasks only"...');
-  const advSettingsBtn = page.locator('span.icon-settings, a.icon-settings, span[onclick*="options-content"]').first();
-  await advSettingsBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await advSettingsBtn.click();
-  await page.waitForTimeout(600);
-
-  const openTasksCb = page.locator('input[type="checkbox"]#open_issues, input[type="checkbox"][name="open_issues"]').first();
-  await openTasksCb.waitFor({ state: 'attached', timeout: 5000 });
-  if (await openTasksCb.isChecked()) {
-    await openTasksCb.uncheck();
-  }
-
-  const submitSearchBtn = page.locator('input[type="submit"][value="Submit"], input[type="submit"][name="commit"]').first();
-  await submitSearchBtn.click();
+  // Điều hướng trực tiếp tới trang tìm kiếm LIS (Redmine) với các tham số tối ưu
+  // open_issues=0 để tìm cả các task đã hoàn thành/closed
+  const searchUrl = `${LIS_URL}search?utf8=%E2%9C%93&q=${encodeURIComponent(cleanSprint)}&all_words=1&open_issues=0&issues=1`;
+  await safeGoto(page, searchUrl);
   await page.waitForLoadState('load', { timeout: 30000 });
   await page.waitForTimeout(1000);
 
-  const firstResultLink = page.locator([
+  // Nếu trình duyệt bị rơi vào trang lỗi nội bộ của Chrome, thử kết nối lại
+  if (page.url().startsWith('chrome-error://')) {
+    console.warn('[!] Phát hiện trang lỗi mạng của Chromium, thử kết nối lại...');
+    await safeGoto(page, searchUrl);
+    await page.waitForLoadState('load', { timeout: 30000 });
+  }
+
+  const resultSelectors = [
+    `#search-results dt a:has-text("${cleanSprint}")`,
+    `#search-results a:has-text("${cleanSprint}")`,
     '#search-results dt a',
     '#search-results li a',
     '.search-results dt a',
     '.search-results a',
     'dt.issue a',
-  ].join(', ')).first();
+  ];
 
-  await firstResultLink.waitFor({ state: 'visible', timeout: 15000 });
+  let firstResultLink = page.locator(resultSelectors.join(', ')).first();
+  const found = await firstResultLink.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+
+  if (!found) {
+    const pageText = await page.innerText('body').catch(() => '');
+    if (pageText.includes('No results found') || pageText.includes('không tìm thấy') || pageText.includes('0 results')) {
+      throw new Error(`Không tìm thấy kết quả nào cho Sprint: "${cleanSprint}". Vui lòng kiểm tra lại chính xác tên Sprint đã nhập trên Jenkins (ví dụ: '2026 Sep 01 Sprint')!`);
+    }
+    throw new Error(`Timeout khi tìm kiếm Sprint "${cleanSprint}" trên LIS (URL hiện tại: ${page.url()})`);
+  }
+
   const resultTitle = await firstResultLink.innerText();
-  await firstResultLink.click();
-  await page.waitForLoadState('load', { timeout: 30000 });
+  await Promise.all([
+    page.waitForLoadState('load', { timeout: 30000 }),
+    firstResultLink.click(),
+  ]);
 
   const sprintTaskUrl = page.url();
   console.log(`  -> [✓] Đã vào trang Sprint task: "${resultTitle.trim()}" (${sprintTaskUrl})\n`);
@@ -482,9 +487,11 @@ async function collectLISMetrics(browser, config = defaultConfig) {
   console.log('GIAI ĐOẠN 1: THU THẬP METRICS TỪ HỆ THỐNG LIS (REDMINE)');
   console.log('='.repeat(70) + '\n');
 
-  const contextOptions = fs.existsSync(AUTH_FILE)
-    ? { storageState: AUTH_FILE, viewport: { width: 1920, height: 1080 } }
-    : { viewport: { width: 1920, height: 1080 } };
+  const contextOptions = {
+    viewport: { width: 1920, height: 1080 },
+    ignoreHTTPSErrors: true,
+    ...(fs.existsSync(AUTH_FILE) ? { storageState: AUTH_FILE } : {}),
+  };
 
   const lisContext = await browser.newContext(contextOptions);
   const lisPage = await lisContext.newPage();

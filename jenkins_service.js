@@ -44,18 +44,16 @@ async function collectJenkinsMetrics(browser, config = defaultConfig) {
   console.log('GIAI ĐOẠN 2: THU THẬP METRICS TỪ HỆ THỐNG JENKINS CI/CD');
   console.log('='.repeat(70) + '\n');
 
-  let context;
+  const contextOptions = {
+    viewport: { width: 1920, height: 1080 },
+    ignoreHTTPSErrors: true,
+    ...(fs.existsSync(AUTH_JENKINS_FILE) ? { storageState: AUTH_JENKINS_FILE } : {}),
+  };
+
   if (fs.existsSync(AUTH_JENKINS_FILE)) {
     console.log('[*] Nạp phiên đăng nhập Jenkins đã lưu (auth_jenkins.json)...');
-    context = await browser.newContext({
-      storageState: AUTH_JENKINS_FILE,
-      viewport: { width: 1920, height: 1080 },
-    });
-  } else {
-    context = await browser.newContext({
-      viewport: { width: 1920, height: 1080 },
-    });
   }
+  const context = await browser.newContext(contextOptions);
 
   const page = await context.newPage();
   try {

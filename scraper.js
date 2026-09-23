@@ -50,7 +50,13 @@ async function scrape(customConfig = null) {
   console.log('[*] Khởi động trình duyệt Playwright...');
   const browser = await chromium.launch({
     headless: config.headless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--ignore-certificate-errors',
+      '--start-maximized',
+    ],
   });
 
   const collectedMetrics = {};
