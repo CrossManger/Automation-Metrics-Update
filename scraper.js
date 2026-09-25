@@ -42,7 +42,7 @@ async function scrape(customConfig = null) {
   console.log('='.repeat(70));
   console.log(`[*] Team dự án:          ${config.team || 'MAX'}`);
   console.log(`[*] Sprint cấu hình:     ${config.sprint}`);
-  console.log(`[*] Khoảng thời gian:    ${config.startDate} -> ${config.endDate}`);
+  console.log(`[*] Khoảng thời gian:    ${config.startDate || 'Tự động lấy từ Sprint'} -> ${config.endDate || 'Tự động lấy từ Sprint'}`);
   console.log(`[*] Hệ thống LIS:        ${LIS_URL}`);
   console.log(`[*] Hệ thống Jenkins:    ${JENKINS_URL}`);
   console.log(`[*] Chế độ Headless:     ${config.headless ? 'BẬT (Chạy ngầm không giao diện)' : 'TẮT (Hiển thị trình duyệt)'}`);
@@ -68,6 +68,8 @@ async function scrape(customConfig = null) {
     // ────────────────────────────────────────────────────────────────
     const lisMetrics = await collectLISMetrics(browser, config);
     Object.assign(collectedMetrics, lisMetrics);
+    if (lisMetrics.startDate) config.startDate = lisMetrics.startDate;
+    if (lisMetrics.endDate) config.endDate = lisMetrics.endDate;
 
     // ────────────────────────────────────────────────────────────────
     // BƯỚC 2: THU THẬP METRICS TỪ HỆ THỐNG JENKINS

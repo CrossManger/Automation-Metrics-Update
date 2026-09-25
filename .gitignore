@@ -1,5 +1,6 @@
 # Các file nhạy cảm - KHÔNG đưa lên git
 config.json
+config_MSS.json
 auth.json
 auth_jenkins.json
 node_modules/
@@ -9,4 +10,6 @@ screenshots/
 *.txt
 test_*.js
 scraped_data.json
+scraped_data_mss.json
 HowTo*.md
+

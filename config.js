@@ -9,9 +9,11 @@ const fs = require('fs');
 const path = require('path');
 
 const CONFIG_FILE = path.join(__dirname, 'config.json');
+const CONFIG_MSS_FILE = path.join(__dirname, 'config_MSS.json');
 const AUTH_FILE = path.join(__dirname, 'auth.json');
 const AUTH_JENKINS_FILE = path.join(__dirname, 'auth_jenkins.json');
 const OUTPUT_DATA_FILE = path.join(__dirname, 'scraped_data.json');
+const OUTPUT_DATA_MSS_FILE = path.join(__dirname, 'scraped_data_mss.json');
 
 const LIS_URL = 'https://lis.larion.com/';
 const JENKINS_URL = 'http://172.16.4.215:8080/view/MAX/';
@@ -44,8 +46,8 @@ function loadConfig() {
   config.jenkins_username = process.env.JENKINS_USERNAME || config.jenkins_username || config.username;
   config.jenkins_password = process.env.JENKINS_PASSWORD || config.jenkins_password || config.password;
   config.sprint = process.env.SPRINT_NAME || process.env.SPRINT || config.sprint;
-  config.startDate = process.env.START_DATE || config.startDate;
-  config.endDate = process.env.END_DATE || process.env.DUE_DATE || config.endDate;
+  config.startDate = process.env.START_DATE || config.startDate || null;
+  config.endDate = process.env.END_DATE || process.env.DUE_DATE || config.endDate || null;
 
   if (!config.username || !config.password) {
     console.error('[X] LỖI: Thiếu "username" hoặc "password" đăng nhập LIS! (Kiểm tra config.json hoặc biến LIS_USERNAME / LIS_PASSWORD)');
@@ -58,16 +60,56 @@ function loadConfig() {
     console.error('[X] LỖI: Thiếu "sprint"! (Kiểm tra config.json hoặc biến SPRINT_NAME)');
     process.exit(1);
   }
-  if (!config.startDate || !config.endDate) {
-    console.error('[X] LỖI: Thiếu "startDate" hoặc "endDate"! (Kiểm tra config.json hoặc biến START_DATE / END_DATE)');
-    process.exit(1);
-  }
 
   // Cấu hình headless: ưu tiên biến môi trường HEADLESS, sau đó tới config.json, mặc định là true
   if (process.env.HEADLESS !== undefined) {
     config.headless = process.env.HEADLESS.toLowerCase() === 'true';
   } else if (config.headless === undefined) {
-    config.headless = true;
+    config.headless = false;
+  }
+
+  return config;
+}
+
+function loadConfigMSS() {
+  let config = {};
+  if (fs.existsSync(CONFIG_MSS_FILE)) {
+    try {
+      config = JSON.parse(fs.readFileSync(CONFIG_MSS_FILE, 'utf-8'));
+    } catch (e) {
+      console.warn(`[!] Không đọc được file config_MSS.json: ${e.message}`);
+    }
+  }
+
+  config.team = 'MSS';
+  config.username = process.env.LIS_USERNAME || config.username;
+  config.password = process.env.LIS_PASSWORD || config.password;
+  config.jenkins_username = process.env.JENKINS_USERNAME || config.jenkins_username || config.username;
+  config.jenkins_password = process.env.JENKINS_PASSWORD || config.jenkins_password || config.password;
+  config.sprint = process.env.SPRINT_NAME || process.env.SPRINT || config.sprint;
+  config.startDate = process.env.START_DATE || config.startDate;
+  config.endDate = process.env.END_DATE || process.env.DUE_DATE || config.endDate;
+
+  // Hỗ trợ tiếp nhận danh sách/bảng Work Items từ biến môi trường (Jenkins), config hoặc file work_items.txt
+  const workItemsFile = path.join(__dirname, 'work_items.txt');
+  config.workItems =
+    process.env.WORK_ITEMS_DATA ||
+    config.workItems ||
+    (fs.existsSync(workItemsFile) ? fs.readFileSync(workItemsFile, 'utf-8') : '');
+
+  if (!config.username || !config.password) {
+    console.error('[X] LỖI: Thiếu "username" hoặc "password" đăng nhập LIS! (Kiểm tra config_MSS.json hoặc biến LIS_USERNAME / LIS_PASSWORD)');
+    process.exit(1);
+  }
+  if (!config.sprint) {
+    console.error('[X] LỖI: Thiếu "sprint"! (Kiểm tra config_MSS.json hoặc biến SPRINT_NAME)');
+    process.exit(1);
+  }
+
+  if (process.env.HEADLESS !== undefined) {
+    config.headless = process.env.HEADLESS.toLowerCase() === 'true';
+  } else if (config.headless === undefined) {
+    config.headless = false;
   }
 
   return config;
@@ -77,11 +119,15 @@ const config = loadConfig();
 
 module.exports = {
   config,
+  loadConfig,
+  loadConfigMSS,
   LIS_URL,
   JENKINS_URL,
   CONFIG_FILE,
+  CONFIG_MSS_FILE,
   AUTH_FILE,
   AUTH_JENKINS_FILE,
   OUTPUT_DATA_FILE,
+  OUTPUT_DATA_MSS_FILE,
   POWER_AUTOMATE_WEBHOOKS,
 };
