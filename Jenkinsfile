@@ -22,9 +22,8 @@ pipeline {
         // =========================================================================
         // THÔNG TIN SPRINT & BỘ LỌC DỮ LIỆU (SPRINT & METRICS FILTER)
         // =========================================================================
-        string(name: 'SPRINT_NAME', defaultValue: '', description: 'Sprint Name')
-        string(name: 'START_DATE', defaultValue: '', description: '(YYYY-MM-DD)')
-        string(name: 'END_DATE', defaultValue: '', description: '(YYYY-MM-DD)')
+        string(name: 'SPRINT_NAME', defaultValue: '', description: 'Sprint Name (Ví dụ: 2026 Sep 02 Sprint hoặc 2026- September Sprint)')
+        text(name: 'WORK_ITEMS_DATA', defaultValue: '', description: '[Dành cho Team MSS] Dán bảng hoặc danh sách mã Work Items (#WI)')
     }
 
     environment {
@@ -45,8 +44,6 @@ pipeline {
                     if (!params.LIS_USERNAME?.trim()) missingParams.add("LIS_USERNAME (Tài khoản LIS)")
                     if (!params.LIS_PASSWORD?.toString()?.trim()) missingParams.add("LIS_PASSWORD (Mật khẩu LIS)")
                     if (!params.SPRINT_NAME?.trim()) missingParams.add("SPRINT_NAME (Tên Sprint)")
-                    if (!params.START_DATE?.trim()) missingParams.add("START_DATE (Ngày bắt đầu)")
-                    if (!params.END_DATE?.trim()) missingParams.add("END_DATE (Ngày kết thúc)")
 
                     if (missingParams.size() > 0) {
                         error("""
@@ -61,7 +58,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "✅ Tất cả thông tin nhập liệu đã đầy đủ và hợp lệ."
                     echo "   - Team:       ${params.TEAM} (Cập nhật ${params.TEAM == 'MAX' ? 'Excel 1' : 'Excel 2'})"
                     echo "   - Sprint:     ${params.SPRINT_NAME}"
-                    echo "   - Dải ngày:   ${params.START_DATE} -> ${params.END_DATE}"
+                    echo "   - Dải ngày:   Tự động trích xuất từ Sprint Task trên LIS"
                     echo "   - Cập nhật:   Tự động gửi sang Power Automate (Bắt buộc)"
                 }
             }
@@ -112,7 +109,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                     echo "Team:       ${params.TEAM}"
                     echo "User LIS:   ${params.LIS_USERNAME}"
                     echo "Sprint:     ${params.SPRINT_NAME}"
-                    echo "Dải ngày:   ${params.START_DATE} -> ${params.END_DATE}"
+                    echo "Dải ngày:   Tự động trích xuất từ Sprint Task trên LIS"
                     echo "=========================================="
 
                     def jenkinsUser = params.JENKINS_USERNAME?.trim() ?: params.LIS_USERNAME
@@ -125,8 +122,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                         "JENKINS_USERNAME=${jenkinsUser}",
                         "JENKINS_PASSWORD=${jenkinsPass}",
                         "SPRINT_NAME=${params.SPRINT_NAME}",
-                        "START_DATE=${params.START_DATE}",
-                        "END_DATE=${params.END_DATE}",
+                        "WORK_ITEMS_DATA=${params.WORK_ITEMS_DATA ?: ''}",
                         "HEADLESS=true"
                     ]) {
                         sh '''
@@ -137,13 +133,18 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
                             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                             nvm use 20 >/dev/null 2>&1 || true
 
-                            echo "[*] Chạy scraper cho Team ${TEAM} với Node: $(node -v)"
-                            node scraper.js
+                            if [ "$TEAM" = "MSS" ]; then
+                                echo "[*] Chạy scraper cho Team MSS với Node: $(node -v)"
+                                node scraper_mss.js
+                            else
+                                echo "[*] Chạy scraper cho Team MAX với Node: $(node -v)"
+                                node scraper.js
+                            fi
                         '''
                     }
 
                     // Lưu trữ file kết quả làm Build Artifact
-                    archiveArtifacts artifacts: 'scraped_data.json', fingerprint: true, allowEmptyArchive: false
+                    archiveArtifacts artifacts: 'scraped_data*.json', fingerprint: true, allowEmptyArchive: false
                 }
             }
         }
@@ -182,7 +183,7 @@ Vui lòng điền đầy đủ các trường sau trên giao diện Build with P
             echo "=========================================="
             // Dọn dẹp session và file tạm để đảm bảo an toàn bảo mật và workspace sạch sẽ
             sh '''
-                rm -f auth.json auth_jenkins.json scraped_data.json
+                rm -f auth.json auth_jenkins.json scraped_data.json scraped_data_mss.json
             '''
         }
         success {

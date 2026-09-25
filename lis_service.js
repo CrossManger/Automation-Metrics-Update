@@ -75,6 +75,25 @@ async function ensureLoggedInLIS(page, context, config) {
 // ======================================================================
 
 /**
+ * Chuẩn hóa chuỗi ngày lấy từ LIS (ví dụ: "Sep 04, 2026" hoặc "2026-08-25") về định dạng YYYY-MM-DD.
+ * @param {string} dateStr Chuỗi ngày gốc từ DOM
+ * @returns {string|null} Chuỗi ngày chuẩn YYYY-MM-DD
+ */
+function parseDateLIS(dateStr) {
+  if (!dateStr) return null;
+  const clean = dateStr.replace(/Start date:?|Due date:?/gi, '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  const d = new Date(clean);
+  if (!isNaN(d.getTime())) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return clean;
+}
+
+/**
  * Tính điểm độ tương đồng giữa kết quả tìm kiếm và tên Sprint cần tìm.
  * Ưu tiên:
  *   - Khớp chính xác tên Sprint (bỏ qua tiền tố Task:, Issue:, v.v.)
@@ -198,22 +217,15 @@ async function searchAndOpenSprint(page, sprintName) {
   const bestMatch = scoredCandidates[0];
   console.log(`  -> [*] Tìm thấy ${candidates.length} kết quả. Đã chọn kết quả có chữ tương tự nhất: "${bestMatch.linkText}" (Score: ${bestMatch.score}, URL: ${bestMatch.href})`);
 
-  // Nhấp vào kết quả phù hợp nhất thay vì mặc định lấy kết quả đầu tiên
-  const targetLink = page.locator(`a[href="${bestMatch.href}"], a[href$="${bestMatch.href}"]`).first();
-  if (await targetLink.count() > 0) {
-    await Promise.all([
-      page.waitForLoadState('load', { timeout: 30000 }),
-      targetLink.click(),
-    ]);
-  } else {
-    const fullUrl = bestMatch.href.startsWith('http') ? bestMatch.href : `${LIS_URL.replace(/\/$/, '')}${bestMatch.href}`;
-    await safeGoto(page, fullUrl);
-    await page.waitForLoadState('load', { timeout: 30000 });
-  }
+  // Điều hướng trực tiếp tới Sprint task phù hợp nhất
+  const sprintTaskUrl = bestMatch.href.startsWith('http')
+    ? bestMatch.href
+    : `${LIS_URL.replace(/\/$/, '')}${bestMatch.href}`;
+  await safeGoto(page, sprintTaskUrl);
+  await page.waitForLoadState('load', { timeout: 30000 });
 
-  const sprintTaskUrl = page.url();
   const resultTitle = await page.locator('h2, .issue .subject h3').first().innerText().catch(() => bestMatch.linkText);
-  console.log(`  -> [✓] Đã vào trang Sprint task: "${resultTitle.trim()}" (${sprintTaskUrl})\n`);
+  console.log(`  -> [✓] Đã vào trang Sprint task: "${resultTitle.trim()}" (${sprintTaskUrl})`);
 
   // Tự động nhận diện Project ID từ liên kết trên trang Sprint Task (không cần cấu hình thủ công)
   const projectId = await page.evaluate(() => {
@@ -226,7 +238,41 @@ async function searchAndOpenSprint(page, sprintName) {
     return bodyMatch ? bodyMatch[1] : '786';
   });
 
-  return { sprintTaskUrl, projectId };
+  // Tự động trích xuất Start Date và Due Date của Sprint Task từ DOM
+  const rawDates = await page.evaluate(() => {
+    let start = null;
+    let due = null;
+
+    const startEl = document.querySelector('.start-date .value, td.start-date, .attribute.start-date');
+    if (startEl) start = startEl.innerText.trim();
+
+    const dueEl = document.querySelector('.due-date .value, td.due-date, .attribute.due-date');
+    if (dueEl) due = dueEl.innerText.trim();
+
+    if (!start) {
+      const m = document.body.innerText.match(/Start date:\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[A-Za-z]{3}\s+\d{1,2},\s+\d{4})/i);
+      if (m) start = m[1];
+    }
+    if (!due) {
+      const m = document.body.innerText.match(/Due date:\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}\/[0-9]{2}\/[0-9]{4}|[A-Za-z]{3}\s+\d{1,2},\s+\d{4})/i);
+      if (m) due = m[1];
+    }
+    return { startDate: start, endDate: due };
+  });
+
+  const startDate = parseDateLIS(rawDates.startDate);
+  const endDate = parseDateLIS(rawDates.endDate);
+
+  console.log(`  -> [✓] Tự động trích xuất Project ID: ${projectId || 'Chưa xác định'}`);
+  console.log(`  -> [✓] Sprint Date: Start = ${startDate || 'N/A'}, End = ${endDate || 'N/A'}\n`);
+
+  return {
+    sprintTaskUrl,
+    projectId,
+    startDate,
+    endDate,
+    sprintTitle: resultTitle.trim(),
+  };
 }
 
 /**
@@ -590,14 +636,23 @@ async function collectLISMetrics(browser, config = defaultConfig) {
     // 1. Kiểm tra đăng nhập LIS
     await ensureLoggedInLIS(lisPage, lisContext, config);
 
-    // 2. Tìm kiếm Sprint task và tự động trích xuất Project ID
-    const { sprintTaskUrl, projectId } = await searchAndOpenSprint(lisPage, config.sprint);
+    // 2. Tìm kiếm Sprint task và tự động trích xuất Project ID, Start Date, End Date
+    const sprintInfo = await searchAndOpenSprint(lisPage, config.sprint);
+    const sprintTaskUrl = sprintInfo.sprintTaskUrl;
+    const projectId = sprintInfo.projectId;
+    const startDate = config.startDate || sprintInfo.startDate;
+    const endDate = config.endDate || sprintInfo.endDate;
+
+    lisMetrics.sprintTaskUrl = sprintTaskUrl;
+    lisMetrics.projectId = projectId;
+    lisMetrics.startDate = startDate;
+    lisMetrics.endDate = endDate;
 
     // 3. Metric: Rework Effort (hours)
     lisMetrics.reworkEffortHoursValue = await collectReworkEffort(lisPage, sprintTaskUrl);
 
     // 4. Metric: Effort to implement IR
-    lisMetrics.effortToImplementIRValue = await collectEffortToImplementIR(lisPage, projectId, config.startDate, config.endDate);
+    lisMetrics.effortToImplementIRValue = await collectEffortToImplementIR(lisPage, projectId, startDate, endDate);
 
     // 5. Metric: Total Spend Effort & Technical Debt
     const spendResults = await collectSprintTasksEffort(lisPage, sprintTaskUrl);
