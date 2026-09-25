@@ -75,6 +75,75 @@ async function ensureLoggedInLIS(page, context, config) {
 // ======================================================================
 
 /**
+ * Tính điểm độ tương đồng giữa kết quả tìm kiếm và tên Sprint cần tìm.
+ * Ưu tiên:
+ *   - Khớp chính xác tên Sprint (bỏ qua tiền tố Task:, Issue:, v.v.)
+ *   - Khớp các từ khóa (Tokens)
+ *   - Đúng loại Tracker là Task (vì Sprint luôn là Task)
+ *   - Trừ điểm nặng các tracker không phải Sprint như NC, Defect/Bug, [Suggestion]
+ */
+function scoreSprintCandidate(candidate, targetSprint, targetTeam = 'MAX') {
+  const normTarget = targetSprint.trim().toLowerCase();
+  const linkText = candidate.linkText.trim();
+  const normLinkText = linkText.toLowerCase();
+  const withoutTracker = normLinkText
+    .replace(/^(task|issue|tracker|feature|story|nc|defect\s*\/\s*bug)\s*[:#-]?\s*/i, '')
+    .trim();
+  const fullText = candidate.fullText.toLowerCase();
+
+  let score = 0;
+
+  // 1. Khớp chính xác hoàn toàn (bỏ qua prefix tracker)
+  if (withoutTracker === normTarget) {
+    score += 10000;
+  } else if (normLinkText === normTarget) {
+    score += 9500;
+  }
+
+  // 2. Khớp chuỗi ký tự chữ & số (bỏ qua khoảng trắng, dấu gạch nối)
+  const targetAlpha = normTarget.replace(/[^a-z0-9]/g, '');
+  const withoutTrackerAlpha = withoutTracker.replace(/[^a-z0-9]/g, '');
+  if (withoutTrackerAlpha && targetAlpha) {
+    if (withoutTrackerAlpha === targetAlpha) {
+      score += 9000;
+    } else if (withoutTrackerAlpha.includes(targetAlpha)) {
+      score += 6000 - Math.min(2000, (withoutTrackerAlpha.length - targetAlpha.length) * 10);
+    }
+  }
+
+  // 3. Khớp chứa chuỗi con
+  if (withoutTracker.includes(normTarget)) {
+    score += 7000 - Math.min(2000, (withoutTracker.length - normTarget.length) * 10);
+  }
+
+  // 4. Khớp theo từng từ khóa (token overlap)
+  const targetWords = normTarget.split(/[^a-z0-9]+/).filter(Boolean);
+  if (targetWords.length > 0) {
+    const matched = targetWords.filter(w => withoutTracker.includes(w));
+    const ratio = matched.length / targetWords.length;
+    score += Math.round(ratio * 4000);
+    if (ratio === 1) score += 2000;
+  }
+
+  // 5. Ưu tiên Tracker là Task (Sprint task luôn thuộc tracker Task)
+  if (/^task\s*[:#-]/i.test(linkText)) {
+    score += 1000;
+  }
+
+  // 6. Phạt điểm cực nặng nếu là NC, Defect/Bug hoặc Suggestion
+  if (/^(nc|defect|bug)\s*[:#-]/i.test(linkText) || withoutTracker.includes('[suggestion]')) {
+    score -= 5000;
+  }
+
+  // 7. Ưu tiên đúng Project nếu có trong text
+  if (targetTeam && fullText.includes(targetTeam.toLowerCase())) {
+    score += 500;
+  }
+
+  return score;
+}
+
+/**
  * Tìm kiếm Sprint task và mở cấu hình nâng cao (bỏ Open tasks only).
  * Trả về URL của Sprint task.
  */
@@ -96,34 +165,54 @@ async function searchAndOpenSprint(page, sprintName) {
     await page.waitForLoadState('load', { timeout: 30000 });
   }
 
-  const resultSelectors = [
-    `#search-results dt a:has-text("${cleanSprint}")`,
-    `#search-results a:has-text("${cleanSprint}")`,
-    '#search-results dt a',
-    '#search-results li a',
-    '.search-results dt a',
-    '.search-results a',
-    'dt.issue a',
-  ];
+  // Chờ danh sách kết quả xuất hiện
+  await page.waitForSelector('#search-results, .search-results, p.nodata, #content', { timeout: 15000 }).catch(() => null);
 
-  let firstResultLink = page.locator(resultSelectors.join(', ')).first();
-  const found = await firstResultLink.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+  // Thu thập toàn bộ kết quả tìm kiếm trên trang
+  const candidates = await page.evaluate(() => {
+    const items = Array.from(document.querySelectorAll('#search-results dt, .search-results dt, dt.issue, #search-results li'));
+    return items.map((el, index) => {
+      const a = el.querySelector('a[href*="/issues/"]') || el.querySelector('a');
+      return {
+        index,
+        fullText: el.innerText.trim(),
+        linkText: a ? a.innerText.trim() : '',
+        href: a ? a.getAttribute('href') : '',
+      };
+    }).filter(item => item.linkText && item.href);
+  });
 
-  if (!found) {
+  if (!candidates || candidates.length === 0) {
     const pageText = await page.innerText('body').catch(() => '');
     if (pageText.includes('No results found') || pageText.includes('không tìm thấy') || pageText.includes('0 results')) {
       throw new Error(`Không tìm thấy kết quả nào cho Sprint: "${cleanSprint}". Vui lòng kiểm tra lại chính xác tên Sprint đã nhập trên Jenkins (ví dụ: '2026 Sep 01 Sprint')!`);
     }
-    throw new Error(`Timeout khi tìm kiếm Sprint "${cleanSprint}" trên LIS (URL hiện tại: ${page.url()})`);
+    throw new Error(`Timeout hoặc không tìm thấy kết quả nào khi tìm kiếm Sprint "${cleanSprint}" trên LIS (URL hiện tại: ${page.url()})`);
   }
 
-  const resultTitle = await firstResultLink.innerText();
-  await Promise.all([
-    page.waitForLoadState('load', { timeout: 30000 }),
-    firstResultLink.click(),
-  ]);
+  // Chấm điểm và sắp xếp theo độ tương đồng cao nhất với tên Sprint lúc search
+  const scoredCandidates = candidates
+    .map(c => ({ ...c, score: scoreSprintCandidate(c, cleanSprint, 'MAX') }))
+    .sort((a, b) => b.score - a.score);
+
+  const bestMatch = scoredCandidates[0];
+  console.log(`  -> [*] Tìm thấy ${candidates.length} kết quả. Đã chọn kết quả có chữ tương tự nhất: "${bestMatch.linkText}" (Score: ${bestMatch.score}, URL: ${bestMatch.href})`);
+
+  // Nhấp vào kết quả phù hợp nhất thay vì mặc định lấy kết quả đầu tiên
+  const targetLink = page.locator(`a[href="${bestMatch.href}"], a[href$="${bestMatch.href}"]`).first();
+  if (await targetLink.count() > 0) {
+    await Promise.all([
+      page.waitForLoadState('load', { timeout: 30000 }),
+      targetLink.click(),
+    ]);
+  } else {
+    const fullUrl = bestMatch.href.startsWith('http') ? bestMatch.href : `${LIS_URL.replace(/\/$/, '')}${bestMatch.href}`;
+    await safeGoto(page, fullUrl);
+    await page.waitForLoadState('load', { timeout: 30000 });
+  }
 
   const sprintTaskUrl = page.url();
+  const resultTitle = await page.locator('h2, .issue .subject h3').first().innerText().catch(() => bestMatch.linkText);
   console.log(`  -> [✓] Đã vào trang Sprint task: "${resultTitle.trim()}" (${sprintTaskUrl})\n`);
 
   // Tự động nhận diện Project ID từ liên kết trên trang Sprint Task (không cần cấu hình thủ công)
